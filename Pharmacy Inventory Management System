@@ -1,0 +1,406 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+
+struct Medicine {
+    int id;
+    char name[50];
+    int quantity;
+    float price;
+    char expiry[15]; 
+    struct Medicine *next;
+};
+
+
+struct Sale {
+    int medicineID;
+    int quantitySold;
+    struct Sale *next;
+};
+
+
+struct SupplierOrder {
+    int medicineID;
+    int quantityOrdered;
+    struct SupplierOrder *next;
+};
+
+
+struct Medicine *medicineHead = NULL;
+struct Sale *saleTop = NULL;
+struct SupplierOrder *orderFront = NULL, *orderRear = NULL;
+
+
+void addMedicine();
+void displayMedicines();
+void searchMedicine();
+void updateMedicine();
+void deleteMedicine();
+void sellMedicine();
+void checkExpiry();
+void generateReport();
+void displaySales();
+void addSupplierOrder();
+void displayOrders();
+int isExpired(char expiry[]);
+
+
+void suggestRestock();
+void predictExpiry();
+int isExpiringSoon(char expiry[]);
+void aiDemandPrediction();
+
+
+void addMedicine() {
+    struct Medicine *newMed = (struct Medicine*)malloc(sizeof(struct Medicine));
+    printf("Enter ID: "); 
+    scanf("%d", &newMed->id);
+
+
+    struct Medicine *tempCheck = medicineHead;
+    while (tempCheck) {
+        if (tempCheck->id == newMed->id) {
+            printf("Medicine with this ID already exists!\n");
+            free(newMed);
+            return;
+        }
+        tempCheck = tempCheck->next;
+    }
+
+    printf("Enter Name: ");
+    scanf(" %[^\n]", newMed->name);
+    printf("Enter Quantity: "); 
+    scanf("%d", &newMed->quantity);
+    printf("Enter Price: "); 
+    scanf("%f", &newMed->price);
+    printf("Enter Expiry (dd/mm/yyyy): "); 
+    scanf("%s", newMed->expiry);
+
+    newMed->next = medicineHead;
+    medicineHead = newMed;
+    printf("Medicine Added Successfully!\n");
+}
+
+
+void displayMedicines() {
+    struct Medicine *temp = medicineHead;
+    if (!temp) { 
+        printf("No Medicines Found!\n"); 
+        return; 
+    }
+    printf("\n%-5s %-15s %-8s %-10s %-12s\n", "ID", "Name", "Qty", "Price", "Expiry");
+    printf("----------------------------------------------------------\n");
+    while (temp) {
+        printf("%-5d %-15s %-8d %-10.2f %-12s\n", temp->id, temp->name, temp->quantity, temp->price, temp->expiry);
+        temp = temp->next;
+    }
+}
+
+
+void searchMedicine() {
+    int id;
+    printf("Enter Medicine ID to search: ");
+    scanf("%d", &id);
+    struct Medicine *temp = medicineHead;
+    while (temp) {
+        if (temp->id == id) {
+            printf("Found: %s | Qty: %d | Price: %.2f | Expiry: %s\n",
+                   temp->name, temp->quantity, temp->price, temp->expiry);
+            return;
+        }
+        temp = temp->next;
+    }
+    printf("Medicine Not Found!\n");
+}
+
+
+void updateMedicine() {
+    int id;
+    printf("Enter Medicine ID to update: ");
+    scanf("%d", &id);
+    struct Medicine *temp = medicineHead;
+    while (temp) {
+        if (temp->id == id) {
+            printf("Enter New Quantity: "); 
+            scanf("%d", &temp->quantity);
+            printf("Enter New Price: "); 
+            scanf("%f", &temp->price);
+            printf("Medicine Updated Successfully!\n");
+            return;
+        }
+        temp = temp->next;
+    }
+    printf("Medicine Not Found!\n");
+}
+
+
+void deleteMedicine() {
+    int id;
+    printf("Enter Medicine ID to delete: ");
+    scanf("%d", &id);
+    struct Medicine *temp = medicineHead, *prev = NULL;
+    while (temp) {
+        if (temp->id == id) {
+            if (prev) prev->next = temp->next;
+            else medicineHead = temp->next;
+            free(temp);
+            printf("Medicine Deleted Successfully!\n");
+            return;
+        }
+        prev = temp;
+        temp = temp->next;
+    }
+    printf("Medicine Not Found!\n");
+}
+
+
+void sellMedicine() {
+    int id, qty;
+    printf("Enter Medicine ID to sell: "); 
+    scanf("%d", &id);
+    printf("Enter Quantity to sell: "); 
+    scanf("%d", &qty);
+
+    struct Medicine *temp = medicineHead;
+    while (temp) {
+        if (temp->id == id) {
+            if (temp->quantity >= qty) {
+                temp->quantity -= qty;
+                printf("Sold %d units of %s. Total Amount: %.2f\n", qty, temp->name, qty * temp->price);
+
+                struct Sale *newSale = (struct Sale*)malloc(sizeof(struct Sale));
+                newSale->medicineID = id;
+                newSale->quantitySold = qty;
+                newSale->next = saleTop;
+                saleTop = newSale;
+
+                suggestRestock();
+            } else {
+                printf("Insufficient Stock!\n");
+            }
+            return;
+        }
+        temp = temp->next;
+    }
+    printf("Medicine Not Found!\n");
+}
+
+
+void checkExpiry() {
+    struct Medicine *temp = medicineHead;
+    int found = 0;
+    printf("\nExpired Medicines:\n");
+    while (temp) {
+        if (isExpired(temp->expiry)) {
+            printf("ID: %d | Name: %s | Expiry: %s\n", temp->id, temp->name, temp->expiry);
+            found = 1;
+        }
+        temp = temp->next;
+    }
+    if (!found) printf("No expired medicines.\n");
+}
+
+
+void generateReport() {
+    struct Medicine *temp = medicineHead;
+    float totalValue = 0;
+    printf("\nInventory Report:\n%-5s %-15s %-8s %-12s\n", "ID", "Name", "Qty", "TotalValue");
+    while (temp) {
+        float value = temp->quantity * temp->price;
+        printf("%-5d %-15s %-8d %-12.2f\n", temp->id, temp->name, temp->quantity, value);
+        totalValue += value;
+        temp = temp->next;
+    }
+    printf("Total Inventory Value: %.2f\n", totalValue);
+
+    suggestRestock();
+}
+
+
+void displaySales() {
+    struct Sale *temp = saleTop;
+    if (!temp) { 
+        printf("No Sales Recorded!\n"); 
+        return; 
+    }
+    printf("\nRecent Sales (LIFO):\n");
+    while (temp) {
+        printf("Medicine ID: %d | Quantity Sold: %d\n", temp->medicineID, temp->quantitySold);
+        temp = temp->next;
+    }
+}
+
+
+void addSupplierOrder() {
+    struct SupplierOrder *newOrder = (struct SupplierOrder*)malloc(sizeof(struct SupplierOrder));
+    printf("Enter Medicine ID to order: "); 
+    scanf("%d", &newOrder->medicineID);
+    printf("Enter Quantity: "); 
+    scanf("%d", &newOrder->quantityOrdered);
+    newOrder->next = NULL;
+
+    if (!orderRear) orderFront = orderRear = newOrder;
+    else { 
+        orderRear->next = newOrder; 
+        orderRear = newOrder; 
+    }
+    printf("Supplier Order Added Successfully!\n");
+}
+
+
+void displayOrders() {
+    struct SupplierOrder *temp = orderFront;
+    if (!temp) { 
+        printf("No Supplier Orders!\n"); 
+        return; 
+    }
+    printf("\nPending Supplier Orders (FIFO):\n");
+    while (temp) {
+        printf("Medicine ID: %d | Quantity: %d\n", temp->medicineID, temp->quantityOrdered);
+        temp = temp->next;
+    }
+}
+
+
+int isExpired(char expiry[]) {
+    int d, m, y;
+    sscanf(expiry, "%d/%d/%d", &d, &m, &y);
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    int curDay = tm.tm_mday, curMonth = tm.tm_mon + 1, curYear = tm.tm_year + 1900;
+    if (y < curYear) return 1;
+    if (y == curYear && m < curMonth) return 1;
+    if (y == curYear && m == curMonth && d < curDay) return 1;
+    return 0;
+}
+
+
+void suggestRestock() {
+    struct Medicine *temp = medicineHead;
+    int found = 0;
+    printf("\nAI Suggestion: Medicines that may need restocking soon\n");
+    while (temp) {
+        if (temp->quantity < 5) {
+            printf("%s (ID: %d) has only %d left — consider reordering.\n",
+                   temp->name, temp->id, temp->quantity);
+            found = 1;
+        }
+        temp = temp->next;
+    }
+    if (!found) printf("All medicines have sufficient stock.\n");
+}
+
+
+int isExpiringSoon(char expiry[]) {
+    int d, m, y;
+    sscanf(expiry, "%d/%d/%d", &d, &m, &y);
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    struct tm exp = {0};
+    exp.tm_mday = d;
+    exp.tm_mon = m - 1;
+    exp.tm_year = y - 1900;
+    double diff = difftime(mktime(&exp), t) / (60 * 60 * 24);
+    return (diff > 0 && diff <= 30);
+}
+
+void predictExpiry() {
+    struct Medicine *temp = medicineHead;
+    int found = 0;
+    printf("\nAI Prediction: Medicines expiring within 30 days\n");
+    while (temp) {
+        if (isExpiringSoon(temp->expiry)) {
+            printf("%s (ID: %d) will expire soon on %s.\n",
+                   temp->name, temp->id, temp->expiry);
+            found = 1;
+        }
+        temp = temp->next;
+    }
+    if (!found) printf("No medicines nearing expiry.\n");
+}
+
+
+void aiDemandPrediction() {
+    if (!saleTop) {
+        printf("No sales data available for AI prediction!\n");
+        return;
+    }
+
+    int ids[100], qty[100], count = 0;
+    struct Sale *s = saleTop;
+    while (s) {
+        int found = 0;
+        for (int i = 0; i < count; i++) {
+            if (ids[i] == s->medicineID) {
+                qty[i] += s->quantitySold;
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            ids[count] = s->medicineID;
+            qty[count] = s->quantitySold;
+            count++;
+        }
+        s = s->next;
+    }
+
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (qty[j] > qty[i]) {
+                int tmpQ = qty[i], tmpID = ids[i];
+                qty[i] = qty[j]; ids[i] = ids[j];
+                qty[j] = tmpQ; ids[j] = tmpID;
+            }
+        }
+    }
+
+    printf("\nAI Demand Prediction: Top Selling Medicines\n");
+    int top = count < 3 ? count : 3;
+    for (int i = 0; i < top; i++) {
+        struct Medicine *m = medicineHead;
+        while (m) {
+            if (m->id == ids[i]) {
+                printf("%d. %s (ID: %d) — Sold %d units\n", i + 1, m->name, m->id, qty[i]);
+                break;
+            }
+            m = m->next;
+        }
+    }
+}
+
+
+int main() {
+    int choice;
+    do {
+        printf("\n--- Pharmacy Management System ---\n");
+        printf("1. Add Medicine\n2. Display Medicines\n3. Search Medicine\n4. Update Medicine\n5. Delete Medicine\n");
+        printf("6. Sell Medicine\n7. Check Expiry\n8. Generate Report\n9. Display Sales\n");
+        printf("10. Add Supplier Order\n11. Display Orders\n");
+        printf("12. AI: Predict Expiry Soon\n13. AI: Demand Prediction (Top Selling)\n14. Exit\n");
+        printf("Enter Choice: "); 
+        scanf("%d", &choice);
+
+        switch(choice) {
+            case 1: addMedicine(); break;
+            case 2: displayMedicines(); break;
+            case 3: searchMedicine(); break;
+            case 4: updateMedicine(); break;
+            case 5: deleteMedicine(); break;
+            case 6: sellMedicine(); break;
+            case 7: checkExpiry(); break;
+            case 8: generateReport(); break;
+            case 9: displaySales(); break;
+            case 10: addSupplierOrder(); break;
+            case 11: displayOrders(); break;
+            case 12: predictExpiry(); break;
+            case 13: aiDemandPrediction(); break;
+            case 14: printf("Exiting...\n"); break;
+            default: printf("Invalid Choice!\n");
+        }
+    } while(choice != 14);
+
+    return 0;
+}
